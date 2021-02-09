@@ -70,12 +70,25 @@ namespace UnityEngine.Rendering.HighDefinition
         /// Width, height, inverse width, inverse height.
         /// </summary>
         public Vector4              screenSize;
+        /// <summary>
+        /// Screen resolution information for post processes passes.
+        /// Width, height, inverse width, inverse height.
+        /// </summary>
+        public Vector4              postProcessScreenSize { get { return m_PostProcessScreenSize; } }
         /// <summary>Camera frustum.</summary>
         public Frustum              frustum;
         /// <summary>Camera component.</summary>
         public Camera               camera;
         /// <summary>TAA jitter information.</summary>
         public Vector4              taaJitter;
+        /// <summary>TAA jitter information in uv space, with respect to the post process resolution target.</summary>
+        public Vector4              taaJitterPostProcessResolution
+        {  
+            get {
+                Vector2 postProcessScale = new Vector2(actualWidth, actualHeight) / new Vector2(postProcessScreenSize.x, postProcessScreenSize.y);
+                return new Vector4(taaJitter.z * postProcessScale.x, taaJitter.w * postProcessScale.y, 0.0f, 0.0f);
+            }
+        }
         /// <summary>View constants.</summary>
         public ViewConstants        mainViewConstants;
         /// <summary>Color pyramid history buffer state.</summary>
@@ -236,6 +249,13 @@ namespace UnityEngine.Rendering.HighDefinition
         internal bool                   animateMaterials;
         internal float                  lastTime;
         internal Camera                 parentCamera = null; // Used for recursive rendering, e.g. a reflection in a scene view.
+
+        private Vector4 m_PostProcessScreenSize = new Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+        private Vector4 m_PostProcessRTScales   = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+        private Vector4 m_PostProcessRTScalesHistory   = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+
+        internal Vector2 postProcessRTScales { get { return new Vector2(m_PostProcessRTScales.x, m_PostProcessRTScales.y); } }
+        internal Vector2 postProcessRTScalesHistory { get { return new Vector2(m_PostProcessRTScalesHistory.x, m_PostProcessRTScalesHistory.y); } }
 
         // This property is ray tracing specific. It allows us to track for the RayTracingShadow history which light was using which slot.
         // This avoid ghosting and many other problems that may happen due to an unwanted history usage
@@ -627,6 +647,7 @@ namespace UnityEngine.Rendering.HighDefinition
             msaaSamples = newMSAASamples;
 
             screenSize = new Vector4(screenWidth, screenHeight, 1.0f / screenWidth, 1.0f / screenHeight);
+            SetPostProcessScreenSize(screenWidth, screenHeight);
             screenParams = new Vector4(screenSize.x, screenSize.y, 1 + screenSize.z, 1 + screenSize.w);
 
             const int kMaxSampleCount = 8;
@@ -637,6 +658,10 @@ namespace UnityEngine.Rendering.HighDefinition
             isFirstFrame = false;
             cameraFrameCount++;
 
+            DynamicResolutionHandler.instance.upsamplerSchedule = currentFrameSettings.IsEnabled(FrameSettingsField.PrepostUpscaler) ?
+                DynamicResolutionHandler.UpsamplerScheduleType.BeforePost :
+                DynamicResolutionHandler.UpsamplerScheduleType.AfterPost;
+
             HDRenderPipeline.UpdateVolumetricBufferParams(this);
             HDRenderPipeline.ResizeVolumetricHistoryBuffers(this);
         }
@@ -646,6 +671,22 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             RTHandles.SetReferenceSize(actualWidth, actualHeight, msaaSamples);
             m_HistoryRTSystem.SwapAndSetReferenceSize(actualWidth, actualHeight, msaaSamples);
+            m_PostProcessRTScalesHistory = m_HistoryRTSystem.CalculateRatioAgainstMaxSize(actualWidth, actualHeight);
+            SetPostProcessScreenSize(actualWidth, actualHeight);
+        }
+
+        internal void SetPostProcessScreenSize(int width, int height)
+        {
+            float newScaleX = width / m_PostProcessScreenSize.x;
+            float newScaleY = height / m_PostProcessScreenSize.y;
+
+            m_PostProcessScreenSize = new Vector4((float)width, (float)height, 1.0f / (float)width, 1.0f / (float)height);
+
+            Vector2 scales = RTHandles.CalculateRatioAgainstMaxSize(width, height);
+            m_PostProcessRTScales = new Vector4(scales.x, scales.y, m_PostProcessRTScales.x, m_PostProcessRTScales.y);
+            /*m_PostProcessRTScalesHistory = new Vector4(
+                m_PostProcessRTScalesHistory.x * newScaleX, m_PostProcessRTScalesHistory.y * newScaleY,
+                m_PostProcessRTScalesHistory.z * newScaleX, m_PostProcessRTScalesHistory.w * newScaleY);*/
         }
 
         // Updating RTHandle needs to be done at the beginning of rendering (not during update of HDCamera which happens in batches)
@@ -736,6 +777,16 @@ namespace UnityEngine.Rendering.HighDefinition
             }
         }
 
+        unsafe internal void UpdateScalesAndScreenSizesCB(ref ShaderVariablesGlobal cb)
+        {
+            cb._ScreenSize = screenSize;
+            cb._PostProcessScreenSize = postProcessScreenSize;
+            cb._RTHandleScale = RTHandles.rtHandleProperties.rtHandleScale;
+            cb._RTHandleScaleHistory = m_HistoryRTSystem.rtHandleProperties.rtHandleScale;
+            cb._RTHandlePostProcessScale = m_PostProcessRTScales;
+            cb._RTHandlePostProcessScaleHistory = m_PostProcessRTScalesHistory;
+        }
+
         unsafe internal void UpdateShaderVariablesGlobalCB(ref ShaderVariablesGlobal cb)
             => UpdateShaderVariablesGlobalCB(ref cb, (int)cameraFrameCount);
 
@@ -758,9 +809,7 @@ namespace UnityEngine.Rendering.HighDefinition
             cb._PrevInvViewProjMatrix = mainViewConstants.prevInvViewProjMatrix;
             cb._WorldSpaceCameraPos_Internal = mainViewConstants.worldSpaceCameraPos;
             cb._PrevCamPosRWS_Internal = mainViewConstants.prevWorldSpaceCameraPos;
-            cb._ScreenSize = screenSize;
-            cb._RTHandleScale = RTHandles.rtHandleProperties.rtHandleScale;
-            cb._RTHandleScaleHistory = m_HistoryRTSystem.rtHandleProperties.rtHandleScale;
+            UpdateScalesAndScreenSizesCB(ref cb);
             cb._ZBufferParams = zBufferParams;
             cb._ProjectionParams = projectionParams;
             cb.unity_OrthoParams = unity_OrthoParams;
@@ -769,7 +818,6 @@ namespace UnityEngine.Rendering.HighDefinition
                 for (int j = 0; j < 4; ++j)
                     cb._FrustumPlanes[i * 4 + j] = frustumPlaneEquations[i][j];
             cb._TaaFrameInfo = new Vector4(taaSharpenStrength, 0, taaFrameIndex, taaEnabled ? 1 : 0);
-            cb._TaaJitterStrength = taaJitter;
             cb._ColorPyramidLodCount = colorPyramidHistoryMipCount;
 
             float ct = time;

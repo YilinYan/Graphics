@@ -126,13 +126,13 @@ namespace UnityEditor.Rendering.HighDefinition
                 ),
             CED.space,
             CED.Group(
-                Drawer_Antialiasing,
-                Drawer_Dithering,
-                Drawer_StopNaNs
+                Drawer_AllowDynamicResolution
                 ),
             CED.space,
             CED.Group(
-                Drawer_AllowDynamicResolution
+                Drawer_Antialiasing,
+                Drawer_Dithering,
+                Drawer_StopNaNs
                 ),
             CED.space,
             CED.Group(
@@ -542,11 +542,33 @@ namespace UnityEditor.Rendering.HighDefinition
 
         static void Drawer_Antialiasing(SerializedHDCamera p, Editor owner)
         {
+            bool doGlobalIndent = false;
+            bool showAntialiasContentAsFallback = false;
+
+            if (p.allowDynamicResolution.boolValue)
+            {
+                bool isPrepostUpscalerEnabled = HDRenderPipeline.currentAsset.currentPlatformRenderPipelineSettings.dynamicResolutionSettings.enablePrepostUpscaler;
+                doGlobalIndent = isPrepostUpscalerEnabled;
+                if (isPrepostUpscalerEnabled)
+                {
+                    showAntialiasContentAsFallback = true;
+                    bool featureDetected = HDDynamicResolutionPlatformCapabilities.GetFlag(HDDynamicResolutionPlatformCapabilities.Flag.PrepostUpscalerDetected);
+
+                    //write here support string for prepost upscaler
+                    EditorGUILayout.HelpBox(
+                        featureDetected ? prepostUpscalerFeatureDetectedMsg : prepostUpscalerFeatureNotDetectedMsg,
+                        featureDetected ? MessageType.Info : MessageType.Warning);
+                }
+            }
+
+            if (doGlobalIndent)
+                EditorGUI.indentLevel++;
+
             Rect antiAliasingRect = EditorGUILayout.GetControlRect();
             EditorGUI.BeginProperty(antiAliasingRect, antialiasingContent, p.antialiasing);
             {
                 EditorGUI.BeginChangeCheck();
-                int selectedValue = EditorGUI.Popup(antiAliasingRect, antialiasingContent, p.antialiasing.intValue, antialiasingModeNames);
+                int selectedValue = EditorGUI.Popup(antiAliasingRect, showAntialiasContentAsFallback ? antialiasingContentFallback : antialiasingContent, p.antialiasing.intValue, antialiasingModeNames);
                 if (EditorGUI.EndChangeCheck())
                     p.antialiasing.intValue = selectedValue;
             }
@@ -578,6 +600,9 @@ namespace UnityEditor.Rendering.HighDefinition
 
                 EditorGUI.indentLevel--;
             }
+
+            if (doGlobalIndent)
+                EditorGUI.indentLevel--;
         }
 
         static void Drawer_Dithering(SerializedHDCamera p, Editor owner)
