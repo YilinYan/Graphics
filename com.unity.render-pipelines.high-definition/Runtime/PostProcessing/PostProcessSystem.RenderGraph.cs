@@ -401,14 +401,19 @@ namespace UnityEngine.Rendering.HighDefinition
             });
         }
 
+        bool IsDynamicResUpscaleTargetEnabled()
+        {
+            return resGroup == ResolutionGroup.BeforeDynamicResUpscale;
+        }
+
         TextureHandle GetPostprocessOutputHandle(RenderGraph renderGraph, string name, bool useMipMap = false)
         {
-            return GetPostprocessOutputHandle(renderGraph, name,resGroup == ResolutionGroup.BeforeDynamicResUpscale, m_ColorFormat, useMipMap);
+            return GetPostprocessOutputHandle(renderGraph, name, IsDynamicResUpscaleTargetEnabled(), m_ColorFormat, useMipMap);
         }
 
         TextureHandle GetPostprocessOutputHandle(RenderGraph renderGraph, string name, GraphicsFormat colorFormat, bool useMipMap = false)
         {
-            return GetPostprocessOutputHandle(renderGraph, name, resGroup == ResolutionGroup.BeforeDynamicResUpscale, colorFormat, useMipMap);
+            return GetPostprocessOutputHandle(renderGraph, name, IsDynamicResUpscaleTargetEnabled(), colorFormat, useMipMap);
         }
 
         TextureHandle GetPostprocessUpsampledOutputHandle(RenderGraph renderGraph, string name)
@@ -1028,19 +1033,19 @@ namespace UnityEngine.Rendering.HighDefinition
                     {
                         if (passData.parameters.nearLayerActive)
                         {
-                            passData.pingNearRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.pingNearRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = m_ColorFormat, enableRandomWrite = true, name = "Ping Near RGB" });
 
-                            passData.pongNearRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.pongNearRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = m_ColorFormat, enableRandomWrite = true, name = "Pong Near RGB" });
 
-                            passData.nearCoC = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.nearCoC = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = k_CoCFormat, enableRandomWrite = true, name = "Near CoC" });
 
-                            passData.nearAlpha = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.nearAlpha = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = k_CoCFormat, enableRandomWrite = true, name = "Near Alpha" });
 
-                            passData.dilatedNearCoC = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.dilatedNearCoC = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = k_CoCFormat, enableRandomWrite = true, name = "Dilated Near CoC" });
                         }
                         else
@@ -1054,13 +1059,13 @@ namespace UnityEngine.Rendering.HighDefinition
 
                         if (passData.parameters.farLayerActive)
                         {
-                            passData.pingFarRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.pingFarRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = m_ColorFormat, useMipMap = true, enableRandomWrite = true, name = "Ping Far RGB" });
 
-                            passData.pongFarRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.pongFarRGB = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = m_ColorFormat, enableRandomWrite = true, name = "Pong Far RGB" });
 
-                            passData.farCoC = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.farCoC = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = k_CoCFormat, useMipMap = true, enableRandomWrite = true, name = "Far CoC" });
                         }
                         else
@@ -1070,7 +1075,7 @@ namespace UnityEngine.Rendering.HighDefinition
                             passData.farCoC = TextureHandle.nullHandle;
                         }
 
-                        passData.fullresCoC = builder.ReadWriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
+                        passData.fullresCoC = builder.ReadWriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, IsDynamicResUpscaleTargetEnabled(), true)
                             { colorFormat = k_CoCFormat, enableRandomWrite = true, name = "Full res CoC" }));
 
                         var debugCocTexture = passData.fullresCoC;
@@ -1088,7 +1093,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         passData.dilationPingPongRT = TextureHandle.nullHandle;
                         if (passCount > 1)
                         {
-                            passData.dilationPingPongRT = builder.CreateTransientTexture(new TextureDesc(screenScale, true, true)
+                            passData.dilationPingPongRT = builder.CreateTransientTexture(new TextureDesc(screenScale, IsDynamicResUpscaleTargetEnabled(), true)
                                 { colorFormat = k_CoCFormat, enableRandomWrite = true, name = "Dilation ping pong CoC" });
                         }
 
@@ -1098,7 +1103,7 @@ namespace UnityEngine.Rendering.HighDefinition
                             mipScale *= 0.5f;
                             var size = new Vector2Int(Mathf.RoundToInt(hdCamera.actualWidth * mipScale), Mathf.RoundToInt(hdCamera.actualHeight * mipScale));
 
-                            passData.mips[i] = builder.CreateTransientTexture(new TextureDesc(new Vector2(mipScale, mipScale), true, true)
+                            passData.mips[i] = builder.CreateTransientTexture(new TextureDesc(new Vector2(mipScale, mipScale), IsDynamicResUpscaleTargetEnabled(), true)
                             {
                                 colorFormat = m_ColorFormat,
                                 enableRandomWrite = true,

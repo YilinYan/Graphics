@@ -326,6 +326,18 @@ float2 ClampAndScaleUVForBilinearPostProcessTexture(float2 UV)
     return ClampAndScaleUV(UV, _PostProcessScreenSize.zw, 0.5f, _RTHandlePostProcessScale.xy);
 }
 
+// This is assuming an upsampled texture used in post processing, with original screen size and a half a texel offset for the clamping.
+float2 ClampAndScaleUVForBilinearPostProcessTexture(float2 UV, float2 texelSize)
+{
+    return ClampAndScaleUV(UV, texelSize, 0.5f, _RTHandlePostProcessScale.xy);
+}
+
+// This is assuming an upsampled texture used in post processing, with original screen size and a half a texel offset for the clamping.
+float2 ClampAndScaleUVPostProcessTexture(float2 UV, float2 texelSize, float numberOfTexels)
+{
+    return ClampAndScaleUV(UV, texelSize, numberOfTexels, _RTHandlePostProcessScale.xy);
+}
+
 float2 ClampAndScaleUVForPoint(float2 UV)
 {
     return min(UV, 1.0f) * _RTHandleScale.xy;

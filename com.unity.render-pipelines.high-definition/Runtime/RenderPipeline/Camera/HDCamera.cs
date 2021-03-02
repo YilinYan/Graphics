@@ -677,16 +677,10 @@ namespace UnityEngine.Rendering.HighDefinition
 
         internal void SetPostProcessScreenSize(int width, int height)
         {
-            float newScaleX = width / m_PostProcessScreenSize.x;
-            float newScaleY = height / m_PostProcessScreenSize.y;
-
             m_PostProcessScreenSize = new Vector4((float)width, (float)height, 1.0f / (float)width, 1.0f / (float)height);
 
             Vector2 scales = RTHandles.CalculateRatioAgainstMaxSize(width, height);
             m_PostProcessRTScales = new Vector4(scales.x, scales.y, m_PostProcessRTScales.x, m_PostProcessRTScales.y);
-            /*m_PostProcessRTScalesHistory = new Vector4(
-                m_PostProcessRTScalesHistory.x * newScaleX, m_PostProcessRTScalesHistory.y * newScaleY,
-                m_PostProcessRTScalesHistory.z * newScaleX, m_PostProcessRTScalesHistory.w * newScaleY);*/
         }
 
         // Updating RTHandle needs to be done at the beginning of rendering (not during update of HDCamera which happens in batches)
